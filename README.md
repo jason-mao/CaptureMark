@@ -1,5 +1,7 @@
 # CaptureMark
 
+简体中文 | [English](README_EN.md)
+
 CaptureMark 是一个纯 AppKit 实现的原生 macOS 截图标注小工具。它轻量、菜单栏常驻，适合快速截取屏幕内容并添加文字或箭头。
 
 ## 功能
@@ -66,4 +68,4 @@ Release 发布后，GitHub Actions 会校验标签与 `VERSION`，构建通用 m
 
 ## 许可证
 
-当前仓库尚未指定开源许可证。在许可证确定前，代码默认保留全部权利。
+本项目采用 [MIT License](LICENSE) 开源。

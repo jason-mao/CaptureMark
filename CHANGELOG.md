@@ -2,6 +2,18 @@
 
 本项目的版本号遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.1.0] - 2026-08-08
+
+### Added
+
+- 新增可开关的文字描边配置，默认关闭
+- 支持单独选择文字描边颜色
+
+### Changed
+
+- 全局框选截图快捷键由 `⌘⇧2` 调整为 `⌘⇧6`
+- 文字不再强制添加黑白双层描边
+
 ## [1.0.0] - 2026-08-08
 
 ### Added
@@ -13,4 +25,5 @@
 - 菜单栏常驻与屏幕录制权限引导
 - 通用 macOS App 的 Release 自动构建
 
+[1.1.0]: https://github.com/jason-mao/CaptureMark/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jason-mao/CaptureMark/releases/tag/v1.0.0

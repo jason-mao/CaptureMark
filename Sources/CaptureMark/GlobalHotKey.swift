@@ -1,6 +1,12 @@
 import Carbon.HIToolbox
 import Foundation
 
+enum CaptureShortcut {
+    static let displayName = "⌘⇧6"
+    static let keyEquivalent = "6"
+    static let carbonKeyCode = UInt32(kVK_ANSI_6)
+}
+
 final class GlobalHotKey {
     private static let signature: OSType = 0x434D4152 // "CMAR"
     private static let identifier: UInt32 = 1
@@ -59,7 +65,7 @@ final class GlobalHotKey {
             id: Self.identifier
         )
         let registrationStatus = RegisterEventHotKey(
-            UInt32(kVK_ANSI_2),
+            CaptureShortcut.carbonKeyCode,
             UInt32(cmdKey | shiftKey),
             hotKeyID,
             GetApplicationEventTarget(),

@@ -12,6 +12,7 @@ struct TextAnnotation {
     var position: CGPoint
     var color: NSColor
     var fontSize: CGFloat
+    var outlineColor: NSColor?
 }
 
 struct ArrowAnnotation {

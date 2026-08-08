@@ -21,6 +21,8 @@ final class AnnotationCanvasView: NSView {
     }
     var currentColor: NSColor = .systemRed
     var currentFontSize: CGFloat = 28
+    var currentTextOutlineEnabled = false
+    var currentTextOutlineColor: NSColor = .black
 
     private let actionUndoManager = UndoManager()
     private var arrowStart: CGPoint?
@@ -83,6 +85,32 @@ final class AnnotationCanvasView: NSView {
         var updated = annotations
         updated[index] = .text(annotation)
         setAnnotations(updated, actionName: "更改字号")
+    }
+
+    func setTextOutlineEnabled(_ enabled: Bool) {
+        currentTextOutlineEnabled = enabled
+        guard let selectedID, let index = annotations.firstIndex(where: { $0.id == selectedID }),
+              case .text(var annotation) = annotations[index] else {
+            return
+        }
+
+        annotation.outlineColor = enabled ? currentTextOutlineColor : nil
+        var updated = annotations
+        updated[index] = .text(annotation)
+        setAnnotations(updated, actionName: enabled ? "开启文字描边" : "关闭文字描边")
+    }
+
+    func setTextOutlineColor(_ color: NSColor) {
+        currentTextOutlineColor = color
+        guard let selectedID, let index = annotations.firstIndex(where: { $0.id == selectedID }),
+              case .text(var annotation) = annotations[index], annotation.outlineColor != nil else {
+            return
+        }
+
+        annotation.outlineColor = color
+        var updated = annotations
+        updated[index] = .text(annotation)
+        setAnnotations(updated, actionName: "更改描边颜色")
     }
 
     func deleteSelection() {
@@ -330,7 +358,8 @@ final class AnnotationCanvasView: NSView {
             text: text,
             position: position,
             color: currentColor,
-            fontSize: currentFontSize
+            fontSize: currentFontSize,
+            outlineColor: currentTextOutlineEnabled ? currentTextOutlineColor : nil
         )
         selectedID = annotation.id
         setAnnotations(annotations + [.text(annotation)], actionName: "添加文字")
@@ -358,8 +387,8 @@ final class AnnotationCanvasView: NSView {
         annotations = newAnnotations
         if let selectedID, !annotations.contains(where: { $0.id == selectedID }) {
             self.selectedID = nil
-            notifySelectionChanged()
         }
+        notifySelectionChanged()
         needsDisplay = true
     }
 
@@ -433,26 +462,20 @@ final class AnnotationCanvasView: NSView {
             y: targetRect.minY + annotation.position.y * scale
         )
         let font = NSFont.systemFont(ofSize: annotation.fontSize * scale, weight: .semibold)
-        let whiteHalo: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.clear,
-            .strokeColor: NSColor.white.withAlphaComponent(0.95),
-            .strokeWidth: -18
-        ]
-        let darkOutline: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.clear,
-            .strokeColor: NSColor.black.withAlphaComponent(0.92),
-            .strokeWidth: -10
-        ]
         let fill: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: annotation.color
         ]
 
-        // 两层相反颜色的描边让文字在纯黑、纯白和复杂背景上都保持清晰。
-        annotation.text.draw(at: point, withAttributes: whiteHalo)
-        annotation.text.draw(at: point, withAttributes: darkOutline)
+        if let outlineColor = annotation.outlineColor {
+            let outline: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.clear,
+                .strokeColor: outlineColor,
+                .strokeWidth: -8
+            ]
+            annotation.text.draw(at: point, withAttributes: outline)
+        }
         annotation.text.draw(at: point, withAttributes: fill)
 
         if selected {

@@ -90,7 +90,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.toolTip = "CaptureMark"
 
         let menu = NSMenu()
-        let captureItem = menuItem("框选截图（⌘⇧2）", action: #selector(beginCapture), key: "2", modifiers: [.command, .shift])
+        let captureItem = menuItem(
+            "框选截图（\(CaptureShortcut.displayName)）",
+            action: #selector(beginCapture),
+            key: CaptureShortcut.keyEquivalent,
+            modifiers: [.command, .shift]
+        )
         menu.addItem(captureItem)
         captureStatusMenuItem = captureItem
         menu.addItem(menuItem("打开编辑器", action: #selector(showEditor), key: "e", modifiers: [.command]))
@@ -105,10 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.beginCapture()
         }
         if status == noErr {
-            captureStatusMenuItem?.title = "框选截图（⌘⇧2）"
-            statusItem?.button?.toolTip = "CaptureMark · ⌘⇧2 框选截图"
+            captureStatusMenuItem?.title = "框选截图（\(CaptureShortcut.displayName)）"
+            statusItem?.button?.toolTip = "CaptureMark · \(CaptureShortcut.displayName) 框选截图"
         } else {
-            captureStatusMenuItem?.title = "框选截图（⌘⇧2 已被占用）"
+            captureStatusMenuItem?.title = "框选截图（\(CaptureShortcut.displayName) 已被占用）"
             statusItem?.button?.toolTip = "CaptureMark · 全局快捷键冲突"
         }
     }
@@ -132,7 +137,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fileMenuItem = NSMenuItem()
         let fileMenu = NSMenu(title: "文件")
-        fileMenu.addItem(menuItem("框选截图", action: #selector(beginCapture), key: "2", modifiers: [.command, .shift]))
+        fileMenu.addItem(menuItem(
+            "框选截图",
+            action: #selector(beginCapture),
+            key: CaptureShortcut.keyEquivalent,
+            modifiers: [.command, .shift]
+        ))
         fileMenu.addItem(menuItem("导出 PNG…", action: #selector(exportPNG), key: "s", modifiers: [.command, .shift]))
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)

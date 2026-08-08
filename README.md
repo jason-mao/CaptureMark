@@ -6,9 +6,10 @@ CaptureMark 是一个纯 AppKit 实现的原生 macOS 截图标注小工具。�
 
 ## 功能
 
-- 多显示器框选截图，全局快捷键 `⌘⇧2`，按 `Esc` 取消
+- 多显示器框选截图，全局快捷键 `⌘⇧6`，按 `Esc` 取消
 - 点击添加文字，文字输入框随字号自适应高度
 - 调整文字和箭头的颜色、字号
+- 文字描边默认关闭，可单独开关并选择描边颜色
 - 拖拽绘制箭头
 - 选择、删除标注以及撤销/重做
 - 将合成图片复制到剪贴板
@@ -24,7 +25,9 @@ CaptureMark 是一个纯 AppKit 实现的原生 macOS 截图标注小工具。�
 2. 允许 CaptureMark 录制屏幕。
 3. 完全退出并重新打开 CaptureMark。
 
-如果 `⌘⇧2` 被其他应用占用，菜单栏中的 CaptureMark 菜单会显示快捷键冲突；也可以点击菜单里的“框选截图”。
+CaptureMark 只注册 `⌘⇧6`，不会禁用系统的 `⌘⇧3`、`⌘⇧4` 和 `⌘⇧5` 截图功能。如果该快捷键被其他应用占用，菜单栏中的 CaptureMark 菜单会显示快捷键冲突；也可以点击菜单里的“框选截图”。
+
+注意：在带 Touch Bar 的旧款 Mac 上，macOS 默认使用 `⌘⇧6` 截取 Touch Bar。可在“系统设置 → 键盘 → 键盘快捷键 → 截图”中调整该系统快捷键，或改用 CaptureMark 菜单中的“框选截图”。
 
 Release 中的 App 使用临时签名，尚未进行 Apple Developer ID 签名和公证。macOS 首次阻止打开时，可在 Finder 中右键 App 后选择“打开”。每次更换或重建 App 后，系统可能要求重新授予屏幕录制权限。
 
@@ -59,9 +62,10 @@ CAPTUREMARK_UNIVERSAL=1 ./Scripts/package_app.sh release
 
 ```bash
 # 先更新 VERSION 和 CHANGELOG.md，然后提交
-git tag -a v1.0.0 -m "CaptureMark 1.0.0"
+version="$(tr -d '[:space:]' < VERSION)"
+git tag -a "v$version" -m "CaptureMark $version"
 git push origin main --follow-tags
-gh release create v1.0.0 --verify-tag --generate-notes --title "CaptureMark 1.0.0"
+gh release create "v$version" --verify-tag --generate-notes --title "CaptureMark $version"
 ```
 
 Release 发布后，GitHub Actions 会校验标签与 `VERSION`，构建通用 macOS App，并把 ZIP 与 SHA-256 校验文件上传到该 Release。

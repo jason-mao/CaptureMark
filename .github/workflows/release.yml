@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate SemVer release tag
         shell: bash
@@ -43,7 +43,7 @@ jobs:
         run: |
           asset="CaptureMark-${GITHUB_REF_NAME}-macOS-universal.zip"
           ditto -c -k --sequesterRsrc --keepParent dist/CaptureMark.app "dist/$asset"
-          shasum -a 256 "dist/$asset" > "dist/$asset.sha256"
+          (cd dist && shasum -a 256 "$asset" > "$asset.sha256")
 
       - name: Upload release assets
         env:

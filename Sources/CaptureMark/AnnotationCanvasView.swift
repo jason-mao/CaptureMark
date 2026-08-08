@@ -13,7 +13,7 @@ final class AnnotationCanvasView: NSView {
 
     var tool: EditorTool = .select {
         didSet {
-            cancelTextEntry()
+            commitTextEntry()
             arrowStart = nil
             arrowCurrent = nil
             needsDisplay = true
@@ -30,6 +30,7 @@ final class AnnotationCanvasView: NSView {
     private weak var activeTextView: InlineTextView?
     private weak var activeTextContainer: NSScrollView?
     private var activeTextPosition: CGPoint?
+    private var activeEditingTextID: UUID?
 
     override var acceptsFirstResponder: Bool { true }
     override var undoManager: UndoManager? { actionUndoManager }
@@ -114,6 +115,9 @@ final class AnnotationCanvasView: NSView {
     }
 
     func deleteSelection() {
+        if activeEditingTextID != nil {
+            cancelTextEntry()
+        }
         guard let selectedID else { return }
         let updated = annotations.filter { $0.id != selectedID }
         self.selectedID = nil
@@ -127,6 +131,10 @@ final class AnnotationCanvasView: NSView {
 
     func performRedo() {
         actionUndoManager.redo()
+    }
+
+    func commitPendingTextEntry() {
+        commitTextEntry()
     }
 
     func renderedPNGData() -> Data? {
@@ -205,18 +213,37 @@ final class AnnotationCanvasView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        if activeTextView != nil {
+            commitTextEntry()
+            return
+        }
+
         window?.makeFirstResponder(self)
         guard let imagePoint = imagePoint(fromViewPoint: convert(event.locationInWindow, from: nil)) else {
             return
         }
 
+        let hitAnnotation = hitTestAnnotation(at: imagePoint)
         switch tool {
         case .select:
-            selectedID = hitTestAnnotation(at: imagePoint)?.id
+            if event.clickCount >= 2, case .text(let text)? = hitAnnotation {
+                beginTextEntry(at: text.position, editing: text)
+                return
+            }
+            selectedID = hitAnnotation?.id
             notifySelectionChanged()
             needsDisplay = true
         case .text:
-            beginTextEntry(at: imagePoint)
+            if case .text(let text)? = hitAnnotation {
+                selectedID = text.id
+                notifySelectionChanged()
+                needsDisplay = true
+                if event.clickCount >= 2 {
+                    beginTextEntry(at: text.position, editing: text)
+                }
+            } else {
+                beginTextEntry(at: imagePoint)
+            }
         case .arrow:
             arrowStart = imagePoint
             arrowCurrent = imagePoint
@@ -261,9 +288,22 @@ final class AnnotationCanvasView: NSView {
         }
     }
 
-    private func beginTextEntry(at position: CGPoint) {
+    private func beginTextEntry(at position: CGPoint, editing annotation: TextAnnotation? = nil) {
         commitTextEntry()
         guard screenshot != nil else { return }
+
+        if let annotation {
+            currentColor = annotation.color
+            currentFontSize = annotation.fontSize
+            currentTextOutlineEnabled = annotation.outlineColor != nil
+            if let outlineColor = annotation.outlineColor {
+                currentTextOutlineColor = outlineColor
+            }
+            selectedID = annotation.id
+        } else {
+            selectedID = nil
+        }
+        notifySelectionChanged()
 
         let viewPoint = viewPoint(fromImagePoint: position)
         let availableWidth = max(180, bounds.maxX - viewPoint.x - 12)
@@ -294,7 +334,8 @@ final class AnnotationCanvasView: NSView {
         textView.autoresizingMask = [.height]
         textView.drawsBackground = false
         textView.textColor = currentColor
-        textView.placeholder = "输入文字 · Return 完成"
+        textView.string = annotation?.text ?? ""
+        textView.placeholder = annotation == nil ? "输入文字 · 点击外部或 Return 完成" : "修改文字 · 点击外部或 Return 完成"
         textView.textContainer?.widthTracksTextView = false
         textView.textContainer?.containerSize = CGSize(
             width: CGFloat.greatestFiniteMagnitude,
@@ -302,13 +343,22 @@ final class AnnotationCanvasView: NSView {
         )
         textView.onCommit = { [weak self] in self?.commitTextEntry() }
         textView.onCancel = { [weak self] in self?.cancelTextEntry() }
+        textView.onFocusLost = { [weak self, weak textView] in
+            guard let self, self.activeTextView === textView else { return }
+            self.commitTextEntry()
+        }
 
         container.documentView = textView
         addSubview(container)
         activeTextContainer = container
         activeTextView = textView
         activeTextPosition = position
+        activeEditingTextID = annotation?.id
         updateActiveTextEditorLayout()
+        if annotation != nil {
+            textView.setSelectedRange(NSRange(location: textView.string.utf16.count, length: 0))
+        }
+        needsDisplay = true
         window?.makeFirstResponder(textView)
     }
 
@@ -340,29 +390,47 @@ final class AnnotationCanvasView: NSView {
         guard let textView = activeTextView,
               let container = activeTextContainer,
               let position = activeTextPosition else { return }
+        let editingTextID = activeEditingTextID
         activeTextView = nil
         activeTextContainer = nil
         activeTextPosition = nil
+        activeEditingTextID = nil
         let text = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         textView.onCommit = nil
         textView.onCancel = nil
+        textView.onFocusLost = nil
         container.removeFromSuperview()
 
         guard !text.isEmpty else {
+            needsDisplay = true
             window?.makeFirstResponder(self)
             return
         }
 
-        let annotation = TextAnnotation(
-            id: UUID(),
-            text: text,
-            position: position,
-            color: currentColor,
-            fontSize: currentFontSize,
-            outlineColor: currentTextOutlineEnabled ? currentTextOutlineColor : nil
-        )
-        selectedID = annotation.id
-        setAnnotations(annotations + [.text(annotation)], actionName: "添加文字")
+        if let editingTextID,
+           let index = annotations.firstIndex(where: { $0.id == editingTextID }),
+           case .text(var annotation) = annotations[index] {
+            annotation.text = text
+            annotation.position = position
+            annotation.color = currentColor
+            annotation.fontSize = currentFontSize
+            annotation.outlineColor = currentTextOutlineEnabled ? currentTextOutlineColor : nil
+            var updated = annotations
+            updated[index] = .text(annotation)
+            selectedID = annotation.id
+            setAnnotations(updated, actionName: "编辑文字")
+        } else {
+            let annotation = TextAnnotation(
+                id: UUID(),
+                text: text,
+                position: position,
+                color: currentColor,
+                fontSize: currentFontSize,
+                outlineColor: currentTextOutlineEnabled ? currentTextOutlineColor : nil
+            )
+            selectedID = annotation.id
+            setAnnotations(annotations + [.text(annotation)], actionName: "添加文字")
+        }
         notifySelectionChanged()
         window?.makeFirstResponder(self)
     }
@@ -372,9 +440,12 @@ final class AnnotationCanvasView: NSView {
         activeTextView = nil
         activeTextContainer = nil
         activeTextPosition = nil
+        activeEditingTextID = nil
         textView.onCommit = nil
         textView.onCancel = nil
+        textView.onFocusLost = nil
         container.removeFromSuperview()
+        needsDisplay = true
         window?.makeFirstResponder(self)
     }
 
@@ -444,6 +515,9 @@ final class AnnotationCanvasView: NSView {
 
     private func drawAnnotations(in targetRect: CGRect, showSelection: Bool) {
         for annotation in annotations {
+            if annotation.id == activeEditingTextID {
+                continue
+            }
             let selected = showSelection && annotation.id == selectedID
             switch annotation {
             case .text(let text):
@@ -642,6 +716,7 @@ private final class InlineTextView: NSTextView {
     var placeholder = ""
     var onCommit: (() -> Void)?
     var onCancel: (() -> Void)?
+    var onFocusLost: (() -> Void)?
 
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36, !hasMarkedText() {
@@ -653,6 +728,16 @@ private final class InlineTextView: NSTextView {
             return
         }
         super.keyDown(with: event)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let didResign = super.resignFirstResponder()
+        if didResign {
+            DispatchQueue.main.async { [weak self] in
+                self?.onFocusLost?()
+            }
+        }
+        return didResign
     }
 
     override func didChangeText() {

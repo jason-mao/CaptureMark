@@ -75,6 +75,7 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
     }
 
     func copyResult() {
+        canvas.commitPendingTextEntry()
         guard let image = canvas.renderedImage(), let pngData = canvas.renderedPNGData() else {
             NSSound.beep()
             return
@@ -88,6 +89,7 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
     }
 
     func exportPNG() {
+        canvas.commitPendingTextEntry()
         guard let pngData = canvas.renderedPNGData() else {
             NSSound.beep()
             return
@@ -251,6 +253,7 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
     }
 
     @objc private func requestCapture() {
+        canvas.commitPendingTextEntry()
         onCaptureRequested?()
     }
 

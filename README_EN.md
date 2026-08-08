@@ -8,6 +8,8 @@ CaptureMark is a lightweight, native macOS screenshot annotation utility built e
 
 - Select and capture an area across multiple displays with the global `⌘⇧6` shortcut; press `Esc` to cancel
 - Click to add text with an editor that automatically adjusts to the selected font size
+- Press Return or click outside the editor to confirm text
+- Double-click confirmed text with the Select or Text tool to edit it again
 - Change the color and font size of text and arrows
 - Keep text outlines off by default, or enable them and choose a separate outline color
 - Drag to draw arrows

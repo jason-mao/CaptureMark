@@ -1,0 +1,54 @@
+name: Build macOS Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build universal macOS app
+    runs-on: macos-15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate SemVer release tag
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+          if [[ ! "$version" =~ $semver_pattern ]]; then
+            echo "Invalid SemVer in VERSION: $version" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match VERSION $version" >&2
+            exit 1
+          fi
+
+      - name: Build universal app
+        env:
+          CAPTUREMARK_UNIVERSAL: "1"
+          CAPTUREMARK_BUILD_NUMBER: ${{ github.run_number }}
+        run: ./Scripts/package_app.sh release
+
+      - name: Archive app and create checksum
+        shell: bash
+        run: |
+          asset="CaptureMark-${GITHUB_REF_NAME}-macOS-universal.zip"
+          ditto -c -k --sequesterRsrc --keepParent dist/CaptureMark.app "dist/$asset"
+          shasum -a 256 "dist/$asset" > "dist/$asset.sha256"
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          asset="CaptureMark-${GITHUB_REF_NAME}-macOS-universal.zip"
+          gh release upload "$GITHUB_REF_NAME" "dist/$asset" "dist/$asset.sha256"

@@ -1,10 +1,83 @@
+import AppKit
 import Carbon.HIToolbox
-import Foundation
+
+enum CaptureShortcutPreset: String, CaseIterable {
+    case commandShift6
+    case commandShift7
+    case commandShift8
+    case commandShift9
+    case commandOption6
+    case controlOption6
+
+    static let defaultPreset: Self = .commandShift6
+
+    var displayName: String {
+        switch self {
+        case .commandShift6: "⌘⇧6"
+        case .commandShift7: "⌘⇧7"
+        case .commandShift8: "⌘⇧8"
+        case .commandShift9: "⌘⇧9"
+        case .commandOption6: "⌘⌥6"
+        case .controlOption6: "⌃⌥6"
+        }
+    }
+
+    var keyEquivalent: String {
+        switch self {
+        case .commandShift6, .commandOption6, .controlOption6: "6"
+        case .commandShift7: "7"
+        case .commandShift8: "8"
+        case .commandShift9: "9"
+        }
+    }
+
+    var cocoaModifiers: NSEvent.ModifierFlags {
+        switch self {
+        case .commandShift6, .commandShift7, .commandShift8, .commandShift9:
+            [.command, .shift]
+        case .commandOption6:
+            [.command, .option]
+        case .controlOption6:
+            [.control, .option]
+        }
+    }
+
+    fileprivate var carbonKeyCode: UInt32 {
+        switch self {
+        case .commandShift6, .commandOption6, .controlOption6: UInt32(kVK_ANSI_6)
+        case .commandShift7: UInt32(kVK_ANSI_7)
+        case .commandShift8: UInt32(kVK_ANSI_8)
+        case .commandShift9: UInt32(kVK_ANSI_9)
+        }
+    }
+
+    fileprivate var carbonModifiers: UInt32 {
+        switch self {
+        case .commandShift6, .commandShift7, .commandShift8, .commandShift9:
+            UInt32(cmdKey | shiftKey)
+        case .commandOption6:
+            UInt32(cmdKey | optionKey)
+        case .controlOption6:
+            UInt32(controlKey | optionKey)
+        }
+    }
+}
 
 enum CaptureShortcut {
-    static let displayName = "⌘⇧6"
-    static let keyEquivalent = "6"
-    static let carbonKeyCode = UInt32(kVK_ANSI_6)
+    private static let defaultsKey = "CaptureShortcutPreset"
+
+    static var current: CaptureShortcutPreset {
+        get {
+            guard let value = UserDefaults.standard.string(forKey: defaultsKey),
+                  let preset = CaptureShortcutPreset(rawValue: value) else {
+                return .defaultPreset
+            }
+            return preset
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
+        }
+    }
 }
 
 final class GlobalHotKey {
@@ -16,7 +89,10 @@ final class GlobalHotKey {
     private var action: (() -> Void)?
 
     @discardableResult
-    func registerCaptureShortcut(action: @escaping () -> Void) -> OSStatus {
+    func registerCaptureShortcut(
+        _ shortcut: CaptureShortcutPreset,
+        action: @escaping () -> Void
+    ) -> OSStatus {
         unregister()
         self.action = action
 
@@ -60,13 +136,10 @@ final class GlobalHotKey {
             return handlerStatus
         }
 
-        let hotKeyID = EventHotKeyID(
-            signature: Self.signature,
-            id: Self.identifier
-        )
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: Self.identifier)
         let registrationStatus = RegisterEventHotKey(
-            CaptureShortcut.carbonKeyCode,
-            UInt32(cmdKey | shiftKey),
+            shortcut.carbonKeyCode,
+            shortcut.carbonModifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             OptionBits(kEventHotKeyExclusive),

@@ -21,6 +21,7 @@ struct ArrowAnnotation {
     var end: CGPoint
     var color: NSColor
     var lineWidth: CGFloat
+    var outlineColor: NSColor?
 }
 
 enum Annotation {

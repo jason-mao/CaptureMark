@@ -2,6 +2,11 @@ import AppKit
 import UniformTypeIdentifiers
 
 final class EditorWindowController: NSWindowController, NSToolbarDelegate, AnnotationCanvasViewDelegate {
+    private enum EditingContext {
+        case text
+        case arrow
+    }
+
     private enum ToolbarID {
         static let capture = NSToolbarItem.Identifier("Capture")
         static let tools = NSToolbarItem.Identifier("Tools")
@@ -18,10 +23,11 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
 
     private weak var toolControl: NSSegmentedControl?
     private weak var colorWell: NSColorWell?
-    private weak var fontSlider: NSSlider?
-    private weak var fontSizeLabel: NSTextField?
-    private weak var textOutlineToggle: NSButton?
-    private weak var textOutlineColorWell: NSColorWell?
+    private weak var sizeSlider: NSSlider?
+    private weak var sizeLabel: NSTextField?
+    private weak var outlineToggle: NSButton?
+    private weak var outlineColorWell: NSColorWell?
+    private var editingContext: EditingContext = .text
 
     init() {
         let window = NSWindow(
@@ -118,28 +124,39 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
     }
 
     func canvasSelectionDidChange(_ annotation: Annotation?) {
-        guard let annotation else {
-            updateTextOutlineControls(
-                enabled: canvas.currentTextOutlineEnabled,
-                color: canvas.currentTextOutlineColor
-            )
-            return
-        }
         switch annotation {
         case .text(let text):
-            colorWell?.color = text.color
-            fontSlider?.doubleValue = text.fontSize
-            updateFontSizeLabel(text.fontSize)
+            editingContext = .text
+            canvas.currentColor = text.color
+            canvas.currentFontSize = text.fontSize
             canvas.currentTextOutlineEnabled = text.outlineColor != nil
             if let outlineColor = text.outlineColor {
                 canvas.currentTextOutlineColor = outlineColor
             }
-            updateTextOutlineControls(
+            colorWell?.color = text.color
+            updateSizeControls(value: text.fontSize, context: .text)
+            updateOutlineControls(
                 enabled: canvas.currentTextOutlineEnabled,
-                color: canvas.currentTextOutlineColor
+                color: canvas.currentTextOutlineColor,
+                context: .text
             )
         case .arrow(let arrow):
+            editingContext = .arrow
+            canvas.currentColor = arrow.color
+            canvas.currentArrowLineWidth = arrow.lineWidth
+            canvas.currentArrowOutlineEnabled = arrow.outlineColor != nil
+            if let outlineColor = arrow.outlineColor {
+                canvas.currentArrowOutlineColor = outlineColor
+            }
             colorWell?.color = arrow.color
+            updateSizeControls(value: arrow.lineWidth, context: .arrow)
+            updateOutlineControls(
+                enabled: canvas.currentArrowOutlineEnabled,
+                color: canvas.currentArrowOutlineColor,
+                context: .arrow
+            )
+        case nil:
+            refreshControlsForCurrentTool()
         }
     }
 
@@ -190,7 +207,7 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
             colorWell = well
             return customItem(identifier: identifier, label: "颜色", view: well)
         case ToolbarID.fontSize:
-            let slider = NSSlider(value: 28, minValue: 12, maxValue: 96, target: self, action: #selector(fontSizeChanged(_:)))
+            let slider = NSSlider(value: 28, minValue: 12, maxValue: 96, target: self, action: #selector(sizeChanged(_:)))
             slider.isContinuous = true
             slider.widthAnchor.constraint(equalToConstant: 94).isActive = true
             let label = NSTextField(labelWithString: "28 pt")
@@ -201,31 +218,31 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
             let stack = NSStackView(views: [slider, label])
             stack.orientation = .horizontal
             stack.spacing = 5
-            fontSlider = slider
-            fontSizeLabel = label
-            return customItem(identifier: identifier, label: "字号", view: stack)
+            sizeSlider = slider
+            sizeLabel = label
+            return customItem(identifier: identifier, label: "大小", view: stack)
         case ToolbarID.textOutline:
             let toggle = NSButton(
-                checkboxWithTitle: "描边",
+                checkboxWithTitle: "边框",
                 target: self,
-                action: #selector(textOutlineToggled(_:))
+                action: #selector(outlineToggled(_:))
             )
             toggle.state = canvas.currentTextOutlineEnabled ? .on : .off
-            toggle.toolTip = "开启或关闭文字描边"
+            toggle.toolTip = "开启或关闭标注边框"
 
             let well = NSColorWell(frame: CGRect(x: 0, y: 0, width: 38, height: 28))
             well.color = canvas.currentTextOutlineColor
             well.isEnabled = canvas.currentTextOutlineEnabled
             well.target = self
-            well.action = #selector(textOutlineColorChanged(_:))
-            well.toolTip = "文字描边颜色"
+            well.action = #selector(outlineColorChanged(_:))
+            well.toolTip = "标注边框颜色"
 
             let stack = NSStackView(views: [toggle, well])
             stack.orientation = .horizontal
             stack.spacing = 6
-            textOutlineToggle = toggle
-            textOutlineColorWell = well
-            return customItem(identifier: identifier, label: "文字描边", view: stack)
+            outlineToggle = toggle
+            outlineColorWell = well
+            return customItem(identifier: identifier, label: "边框", view: stack)
         case ToolbarID.undo:
             return buttonItem(
                 identifier: identifier,
@@ -259,6 +276,7 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
 
     @objc private func toolChanged(_ sender: NSSegmentedControl) {
         canvas.tool = EditorTool(rawValue: sender.selectedSegment) ?? .select
+        refreshControlsForCurrentTool()
         window?.makeFirstResponder(canvas)
     }
 
@@ -266,21 +284,36 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
         canvas.setColor(sender.color)
     }
 
-    @objc private func fontSizeChanged(_ sender: NSSlider) {
+    @objc private func sizeChanged(_ sender: NSSlider) {
         let value = CGFloat(sender.doubleValue.rounded())
-        updateFontSizeLabel(value)
-        canvas.setFontSize(value)
+        updateSizeLabel(value, context: editingContext)
+        switch editingContext {
+        case .text:
+            canvas.setFontSize(value)
+        case .arrow:
+            canvas.setArrowLineWidth(value)
+        }
     }
 
-    @objc private func textOutlineToggled(_ sender: NSButton) {
+    @objc private func outlineToggled(_ sender: NSButton) {
         let enabled = sender.state == .on
-        textOutlineColorWell?.isEnabled = enabled
-        canvas.setTextOutlineEnabled(enabled)
+        outlineColorWell?.isEnabled = enabled
+        switch editingContext {
+        case .text:
+            canvas.setTextOutlineEnabled(enabled)
+        case .arrow:
+            canvas.setArrowOutlineEnabled(enabled)
+        }
         window?.makeFirstResponder(canvas)
     }
 
-    @objc private func textOutlineColorChanged(_ sender: NSColorWell) {
-        canvas.setTextOutlineColor(sender.color)
+    @objc private func outlineColorChanged(_ sender: NSColorWell) {
+        switch editingContext {
+        case .text:
+            canvas.setTextOutlineColor(sender.color)
+        case .arrow:
+            canvas.setArrowOutlineColor(sender.color)
+        }
     }
 
     @objc private func undoClicked() {
@@ -315,14 +348,54 @@ final class EditorWindowController: NSWindowController, NSToolbarDelegate, Annot
         return item
     }
 
-    private func updateFontSizeLabel(_ value: CGFloat) {
-        fontSizeLabel?.stringValue = "\(Int(value)) pt"
+    private func refreshControlsForCurrentTool() {
+        if canvas.tool == .arrow {
+            editingContext = .arrow
+            colorWell?.color = canvas.currentColor
+            updateSizeControls(value: canvas.currentArrowLineWidth, context: .arrow)
+            updateOutlineControls(
+                enabled: canvas.currentArrowOutlineEnabled,
+                color: canvas.currentArrowOutlineColor,
+                context: .arrow
+            )
+        } else {
+            editingContext = .text
+            colorWell?.color = canvas.currentColor
+            updateSizeControls(value: canvas.currentFontSize, context: .text)
+            updateOutlineControls(
+                enabled: canvas.currentTextOutlineEnabled,
+                color: canvas.currentTextOutlineColor,
+                context: .text
+            )
+        }
     }
 
-    private func updateTextOutlineControls(enabled: Bool, color: NSColor) {
-        textOutlineToggle?.state = enabled ? .on : .off
-        textOutlineColorWell?.color = color
-        textOutlineColorWell?.isEnabled = enabled
+    private func updateSizeControls(value: CGFloat, context: EditingContext) {
+        editingContext = context
+        switch context {
+        case .text:
+            sizeSlider?.minValue = 12
+            sizeSlider?.maxValue = 96
+        case .arrow:
+            sizeSlider?.minValue = 2
+            sizeSlider?.maxValue = 18
+        }
+        sizeSlider?.doubleValue = value
+        updateSizeLabel(value, context: context)
+    }
+
+    private func updateSizeLabel(_ value: CGFloat, context: EditingContext) {
+        let unit = context == .text ? "pt" : "px"
+        sizeLabel?.stringValue = "\(Int(value)) \(unit)"
+    }
+
+    private func updateOutlineControls(enabled: Bool, color: NSColor, context: EditingContext) {
+        editingContext = context
+        outlineToggle?.state = enabled ? .on : .off
+        outlineToggle?.toolTip = context == .text ? "开启或关闭文字边框" : "开启或关闭箭头边框"
+        outlineColorWell?.color = color
+        outlineColorWell?.isEnabled = enabled
+        outlineColorWell?.toolTip = context == .text ? "文字边框颜色" : "箭头边框颜色"
     }
 
     private func suggestedFilename() -> String {

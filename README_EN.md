@@ -4,14 +4,18 @@
 
 CaptureMark is a lightweight, native macOS screenshot annotation utility built entirely with AppKit. It lives in the menu bar and makes it quick to capture screen content and add text or arrows.
 
+<img src="Resources/AppIcon.png" alt="CaptureMark app icon" width="128">
+
 ## Features
 
-- Select and capture an area across multiple displays with the global `⌘⇧6` shortcut; press `Esc` to cancel
+- Select and capture an area across multiple displays with the default global `⌘⇧6` shortcut; press `Esc` to cancel
+- Automatically copy the original capture when using the global shortcut, ready to paste immediately or annotate further
+- Change the shortcut from the “Capture Shortcut” submenu in the menu bar; the choice is persisted
 - Click to add text with an editor that automatically adjusts to the selected font size
 - Press Return or click outside the editor to confirm text
 - Double-click confirmed text with the Select or Text tool to edit it again
-- Change the color and font size of text and arrows
-- Keep text outlines off by default, or enable them and choose a separate outline color
+- Change the color and size of text and arrows
+- Keep text and arrow outlines off by default, or configure each outline and its color independently
 - Drag to draw arrows
 - Select and delete annotations, with undo and redo support
 - Copy the composed image to the clipboard
@@ -27,9 +31,9 @@ macOS will request Screen Recording permission the first time you capture the sc
 2. Allow CaptureMark to record the screen.
 3. Quit CaptureMark completely, then reopen it.
 
-CaptureMark registers only `⌘⇧6`; it does not disable the system `⌘⇧3`, `⌘⇧4`, or `⌘⇧5` screenshot shortcuts. If another application is already using the CaptureMark shortcut, its menu bar menu will report a conflict. You can still select “Capture Area” from that menu.
+CaptureMark registers `⌘⇧6` by default; it does not disable the system `⌘⇧3`, `⌘⇧4`, or `⌘⇧5` screenshot shortcuts. Choose another combination from the “Capture Shortcut” submenu under the CaptureMark menu bar icon. If the new combination is occupied, CaptureMark keeps the previous shortcut and reports the conflict.
 
-Note: On older Macs with a Touch Bar, macOS uses `⌘⇧6` to capture the Touch Bar by default. You can change that system shortcut under System Settings → Keyboard → Keyboard Shortcuts → Screenshots, or use “Capture Area” from the CaptureMark menu.
+Note: On older Macs with a Touch Bar, macOS uses `⌘⇧6` to capture the Touch Bar by default. Choose another combination directly from CaptureMark’s “Capture Shortcut” submenu.
 
 Apps attached to Releases are ad-hoc signed and are not yet signed or notarized with an Apple Developer ID. If macOS blocks the app on first launch, right-click it in Finder and select “Open.” Replacing or rebuilding the app may require granting Screen Recording permission again.
 

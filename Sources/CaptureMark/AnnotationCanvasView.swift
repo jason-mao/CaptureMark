@@ -16,6 +16,10 @@ final class AnnotationCanvasView: NSView {
             commitTextEntry()
             arrowStart = nil
             arrowCurrent = nil
+            if oldValue != tool {
+                selectedID = nil
+                notifySelectionChanged()
+            }
             needsDisplay = true
         }
     }
@@ -23,6 +27,9 @@ final class AnnotationCanvasView: NSView {
     var currentFontSize: CGFloat = 28
     var currentTextOutlineEnabled = false
     var currentTextOutlineColor: NSColor = .black
+    var currentArrowLineWidth: CGFloat = 6
+    var currentArrowOutlineEnabled = false
+    var currentArrowOutlineColor: NSColor = .black
 
     private let actionUndoManager = UndoManager()
     private var arrowStart: CGPoint?
@@ -112,6 +119,48 @@ final class AnnotationCanvasView: NSView {
         var updated = annotations
         updated[index] = .text(annotation)
         setAnnotations(updated, actionName: "更改描边颜色")
+    }
+
+    func setArrowLineWidth(_ width: CGFloat) {
+        currentArrowLineWidth = width
+        guard let selectedID, let index = annotations.firstIndex(where: { $0.id == selectedID }),
+              case .arrow(var annotation) = annotations[index] else {
+            needsDisplay = true
+            return
+        }
+
+        annotation.lineWidth = width
+        var updated = annotations
+        updated[index] = .arrow(annotation)
+        setAnnotations(updated, actionName: "更改箭头大小")
+    }
+
+    func setArrowOutlineEnabled(_ enabled: Bool) {
+        currentArrowOutlineEnabled = enabled
+        guard let selectedID, let index = annotations.firstIndex(where: { $0.id == selectedID }),
+              case .arrow(var annotation) = annotations[index] else {
+            needsDisplay = true
+            return
+        }
+
+        annotation.outlineColor = enabled ? currentArrowOutlineColor : nil
+        var updated = annotations
+        updated[index] = .arrow(annotation)
+        setAnnotations(updated, actionName: enabled ? "开启箭头边框" : "关闭箭头边框")
+    }
+
+    func setArrowOutlineColor(_ color: NSColor) {
+        currentArrowOutlineColor = color
+        guard let selectedID, let index = annotations.firstIndex(where: { $0.id == selectedID }),
+              case .arrow(var annotation) = annotations[index], annotation.outlineColor != nil else {
+            needsDisplay = true
+            return
+        }
+
+        annotation.outlineColor = color
+        var updated = annotations
+        updated[index] = .arrow(annotation)
+        setAnnotations(updated, actionName: "更改箭头边框颜色")
     }
 
     func deleteSelection() {
@@ -206,7 +255,8 @@ final class AnnotationCanvasView: NSView {
                 start: start,
                 end: end,
                 color: currentColor,
-                lineWidth: 4
+                lineWidth: currentArrowLineWidth,
+                outlineColor: currentArrowOutlineEnabled ? currentArrowOutlineColor : nil
             )
             drawArrow(preview, in: imageRect, selected: false)
         }
@@ -273,7 +323,8 @@ final class AnnotationCanvasView: NSView {
             start: start,
             end: end,
             color: currentColor,
-            lineWidth: 4
+            lineWidth: currentArrowLineWidth,
+            outlineColor: currentArrowOutlineEnabled ? currentArrowOutlineColor : nil
         )
         selectedID = annotation.id
         setAnnotations(annotations + [.arrow(annotation)], actionName: "添加箭头")
@@ -570,31 +621,25 @@ final class AnnotationCanvasView: NSView {
             y: targetRect.minY + annotation.end.y * scale
         )
         let baseWidth = max(1, annotation.lineWidth * scale)
-        let outlineWidth = max(1.2, 2.4 * scale)
-
-        // 白色外缘 + 黑色内缘 + 用户颜色，避免箭头消失在相近颜色的截图里。
-        drawArrowLayer(
-            from: start,
-            to: end,
-            lineWidth: baseWidth + outlineWidth * 2,
-            headExpansion: outlineWidth * 1.4,
-            color: NSColor.white.withAlphaComponent(0.95),
-            scale: scale
-        )
-        drawArrowLayer(
-            from: start,
-            to: end,
-            lineWidth: baseWidth + outlineWidth,
-            headExpansion: outlineWidth * 0.7,
-            color: NSColor.black.withAlphaComponent(0.92),
-            scale: scale
-        )
+        if let outlineColor = annotation.outlineColor {
+            let outlineWidth = max(1.2, 2.2 * scale)
+            drawArrowLayer(
+                from: start,
+                to: end,
+                lineWidth: baseWidth + outlineWidth * 2,
+                headExpansion: outlineWidth * 1.4,
+                color: outlineColor,
+                arrowSize: baseWidth,
+                scale: scale
+            )
+        }
         drawArrowLayer(
             from: start,
             to: end,
             lineWidth: baseWidth,
             headExpansion: 0,
             color: annotation.color,
+            arrowSize: baseWidth,
             scale: scale
         )
 
@@ -610,6 +655,7 @@ final class AnnotationCanvasView: NSView {
         lineWidth: CGFloat,
         headExpansion: CGFloat,
         color: NSColor,
+        arrowSize: CGFloat,
         scale: CGFloat
     ) {
         let dx = end.x - start.x
@@ -617,7 +663,7 @@ final class AnnotationCanvasView: NSView {
         let length = max(0.001, hypot(dx, dy))
         let ux = dx / length
         let uy = dy / length
-        let coreHeadLength = max(12 * scale, 18 * scale)
+        let coreHeadLength = max(12 * scale, arrowSize * 3.2)
         let headLength = coreHeadLength + headExpansion
         let headWidth = coreHeadLength * 0.72 + headExpansion * 1.4
         let base = CGPoint(x: end.x - ux * headLength, y: end.y - uy * headLength)
@@ -670,7 +716,8 @@ final class AnnotationCanvasView: NSView {
                 let rect = CGRect(origin: text.position, size: size).insetBy(dx: -8 / scale, dy: -8 / scale)
                 if rect.contains(point) { return annotation }
             case .arrow(let arrow):
-                if distanceFromPoint(point, toSegmentFrom: arrow.start, to: arrow.end) <= 10 / scale {
+                let tolerance = max(10 / scale, arrow.lineWidth / 2 + 6 / scale)
+                if distanceFromPoint(point, toSegmentFrom: arrow.start, to: arrow.end) <= tolerance {
                     return annotation
                 }
             }
